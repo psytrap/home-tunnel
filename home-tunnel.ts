@@ -1,42 +1,31 @@
 import { parseArgs } from "jsr:@std/cli/parse-args";
 import { sleep } from "https://deno.land/x/sleep/mod.ts"
-
-
 import { Command } from "jsr:@cliffy/command@^1.0.0-rc.7"
 
-//import { Command } from "https://deno.land/x/cliffy/command/mod.ts";
-//const REMOTE: boolean = undefined;
-
+// TODO only one connection at time
+// TODO error handling / failure points analysis
+// TODO backplane comms
+// TODO Timeout for inital connection setup
+// TODO API key
+// TODO Race between SSH server close and SSH client close -> error
+// TODO version numbering
 
 const { options } = await new Command()
     .name("Home Tunnel")
-    .version("1.0.0")
+    .version("0.0.1")
     .description("My command-line program")
     .option("-p, --port <port:number>", "Port number", { required: true })
-    .option("-r, --relay <relay:string>", "URL of relay", { required: true })
-    .option("-h, --host <host:string>", "URL/IP of forwarded host", { default: "127.0.0.1" })
-    .option("-r, --remote", "Use remote connection")
+    .option("-x, --relay <relay:string>", "URL of relay", { required: true })
+    .option("-i, --host <host:string>", "URL/IP of forwarded host", { default: "127.0.0.1" })
+    .option("-r, --remote", "Use as remote connection client")
     .parse(Deno.args);
-/*    .action((options) => {
-        console.log("Port:", options.port);
-        console.log("URL:", options.url);
-        console.log("Remote:", options.remote);
-    });*/
+
 const REMOTE: boolean = options.remote ?? false;
 const SIDE: string = REMOTE ? "left" : "right";
 const URL: string = options.relay + '/' + SIDE;
 const PORT: number = options.port;
 const IP_ADDR: string = options.host;
 
-
-
-/*
-const args = parseArgs(Deno.args, {
-    boolean: ["remote"],
-    number: ["port"],
-    string: ["url"],
-});
-*/
 enum States {
     ERROR = "error", // any_error
     INIT = "init", // from error
@@ -47,28 +36,16 @@ enum States {
     CLOSED = "closed", // buffer and port closed
 }
 
-function enumFromStringValue<T> (enm: { [s: string]: T}, value: string): T | undefined {
+function enumFromStringValue<T>(enm: { [s: string]: T }, value: string): T | undefined {
     return (Object.values(enm) as unknown as string[]).includes(value)
-      ? value as unknown as T
-      : undefined;
-  }
+        ? value as unknown as T
+        : undefined;
+}
 
 function stringToState(state: string): States | undefined {
     return enumFromStringValue(States, state);
 }
-/*
-function stringToState(state: string): States | undefined {
-    return States[state as keyof typeof States];
-}*/
-/*
-function stringToState(state: string): States {
-    const validState = States[state as keyof States];
-    if (validState === undefined) {
-        throw new Error(`Invalid state: ${state}`);
-    }
-    return validState;
-}
-*/
+
 interface ProcessingFunction<T> {
     (event: T): Promise<void>;
 }
@@ -157,15 +134,6 @@ function addEventListeners(socket: WebSocket) { // , messageFunc: EventFunction<
     });
 }
 
-// TODO only one connection at time
-// TODO states
-// TODO error handling / failure points
-// TODO parameters
-// TODO backplane comms
-
-
-
-
 async function sendResponse(socket: WebSocket, response: string, state: States) {
     const resp = { response: response, state: state.toString() };
     //console.log(JSON.stringify(resp));
@@ -182,7 +150,7 @@ async function waitForSocketClose(socket: WebSocket): Promise<void> {
     });
 }
 
-function isConn(connObject: Deno.Conn | null): boolean { //conn is Deno.Conn { TODO
+function isConn(connObject: Deno.Conn | null): boolean {
     //return conn instanceof Deno.Conn;
     return (connObject !== null && connObject !== undefined &&
         typeof connObject === 'object' &&
@@ -257,7 +225,7 @@ async function localMain() {
             }
             if (commandHeader !== undefined && commandHeader.command !== "ping") {
                 console.log(commandHeader);
-            }            
+            }
         }
         function addConnEventListeners(eventName: string) {
             connEventListener.addEventListener(eventName, async () => {
@@ -296,6 +264,10 @@ async function localMain() {
         const connEventListener = new EventTarget();
         console.log(URL);
         const socket = new WebSocket(URL);
+        /*
+        socket.headers = {
+            "Authorization": `Bearer ${apiKey}`,
+            };*/
 
         const messageQueue = new QueueProcessor<Blob>(dataDecoder);
         let connPayloadQueue: ArrayBuffer[] = [];
@@ -362,7 +334,6 @@ async function remoteMain() {
 
     addEventListeners(socket);
     let writerQueue: QueueProcessor<Blob> | null = null;
-    // TODO inital sync with UUID
     while (true) {
         const payload = { command: 'ping' };
         socket.send(encodeStringWithLength(payload, new Uint8Array()));
@@ -401,7 +372,6 @@ async function remoteMain() {
             console.log((decoded.header));
         }
         if (responseHeader.state === States.CLOSED || responseHeader.state === States.OPENING) {
-            // TODO nothing / should timeout on the other end.
             await sleep(1);
         }
     }

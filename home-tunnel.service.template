@@ -1,0 +1,19 @@
+[Unit]
+Description = Home Tunnel
+After = network.target
+# Assuming you want to start after network interfaces are made available
+ 
+[Service]
+Type = simple
+ExecStart = /home/home-tunnel/home-tunnel --url {{URL}} --port {{PORT}}
+User = home-tunnel
+Group = home-tunnel
+Restart = on-failure
+# Restart when there are errors
+SyslogIdentifier = home-tunnel
+RestartSec = 10
+TimeoutStartSec = infinity
+ 
+[Install]
+WantedBy = multi-user.target
+# Make it accessible to other users
