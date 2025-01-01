@@ -48,8 +48,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: home-tunnel-${{ matrix.target }}
-          path: |
-              home-tunnel
-              install_service.sh
-              home
+          path: hometunnel-${{ matrix.target }}.tar.gz
           if-no-files-found: error
