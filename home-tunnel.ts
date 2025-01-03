@@ -2,7 +2,7 @@ import { parseArgs } from "jsr:@std/cli/parse-args";
 import { sleep } from "https://deno.land/x/sleep/mod.ts"
 import { Command } from "jsr:@cliffy/command@^1.0.0-rc.7"
 
-// TODO only one connection at time
+// TODO only one connection at time better
 // TODO error handling / failure points analysis
 // TODO backplane comms
 // TODO Timeout for inital connection setup
@@ -396,10 +396,17 @@ async function remoteMain() {
     }, 5000);
 
     for await (const conn of listener) {
+        // @ts-ignore Typescript has issues with async handling of variables
+        if (connOpen === true) {
+            // TODO close old connection
+            console.log("Connection already in use.");
+            conn.closeWrite();
+            conn.close();
+            continue;
+        }
         console.log("New connection");
-        connOpen = false;
+        connOpen = true;
         handleConnection(conn);
-        // TODO only one connection at a time
     }
     socket.removeEventListener("message", handleMessageEvent);
     clearInterval(intervalId);
@@ -412,7 +419,7 @@ async function remoteMain() {
             const decoded = decodeStringWithLength(buffer);
             const responseHeader = decoded.header as ResponseHeader;
             if (remoteState !== stringToState(responseHeader.state)) {
-                console.log(responseHeader);
+                console.log("writerQueue === null && " + JSON.stringify(responseHeader));
                 remoteState = stringToState(responseHeader.state);
             }
 
@@ -423,11 +430,12 @@ async function remoteMain() {
     }
 
     async function handleConnection(conn: Deno.Conn) { // docs Deno.Conn
+        let remoteConn = conn;
         const writer = conn.writable;
         async function processWriter(data: Blob) {
             const buffer = await data.arrayBuffer();
             const decoded = decodeStringWithLength(buffer);
-            conn.write(new Uint8Array(decoded.payload));
+            remoteConn.write(new Uint8Array(decoded.payload));
             const responseHeader: ResponseHeader | undefined = "state" in decoded.header ? decoded.header as ResponseHeader : undefined;
             if (responseHeader === undefined) {
                 return;
@@ -438,18 +446,26 @@ async function remoteMain() {
             }
             if (remoteState === States.CLOSED) {
                 console.log("Local connection closed");
-                conn.close();
+                remoteConn.close();
             }
         }
         writerQueue = new QueueProcessor<Blob>(processWriter);
         try {
             await socket.send(encodeStringWithLength({ command: 'open' }, new Uint8Array()));
-            for await (const chunk of conn.readable) {
-                if (remoteState !== States.CLOSED && remoteState !== States.CLOSING) { // TODO !== States.OPEN
-                    const payload = {};
-                    await socket.send(encodeStringWithLength(payload, chunk));
+            console.log("awaiting chunks");
+            async function readChunks(remoteConn: Deno.Conn) {
+                for await (const chunk of remoteConn.readable) {
+                    if (chunk === null) {
+                        break;
+                    }
+                    if (remoteState !== States.CLOSED && remoteState !== States.CLOSING) { // TODO !== States.OPEN
+                        const payload = {};
+                        await socket.send(encodeStringWithLength(payload, chunk));
+                    }
                 }
             }
+            await readChunks(remoteConn);
+            console.log("awaiting chunks done");
         } catch (error) {
             if (error instanceof Deno.errors.BadResource) {
                 console.log("Connection closed by client (BadResource).");
@@ -466,18 +482,21 @@ async function remoteMain() {
                     const decoded = decodeStringWithLength(buffer);
                     const resp = decoded.header as ResponseHeader;
 
-                    /*
                     if (stringToState(resp.state) === States.CLOSED) {
+                        /* TODO block until fully closed
                         const payload = { command: 'ack_closed' };
                         socket.send(encodeStringWithLength(payload, new Uint8Array()));
                         const event = await waitForMessage(socket); // TODO timeout            
                         const buffer = await event.data.arrayBuffer();
-                        const decoded = decodeStringWithLength(buffer);
+                        const decoded = decodeStringWithLength(buffer);*/
                         break;
-                    }*/
+                    }
                 }
                 console.log("Connection closed by client.");
+                
             }
+            connOpen = false;
+
         }
     }
 }
