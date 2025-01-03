@@ -7,8 +7,8 @@ import { Command } from "jsr:@cliffy/command@^1.0.0-rc.7"
 // TODO backplane comms
 // TODO Timeout for inital connection setup
 // TODO API key
-// TODO Race between SSH server close and SSH client close -> error
 // TODO version numbering
+// TODO use command and response enum
 
 const { options } = await new Command()
     .name("Home Tunnel")
@@ -36,6 +36,13 @@ enum States {
     CLOSED = "closed", // buffer and port closed
 }
 
+enum Commands {
+    RESET = 'reset',
+    OPEN = 'open',
+    CLOSE = 'close',
+    ACK_CLOSED = 'ack_closed',
+    SYNC = 'sync'
+}
 function enumFromStringValue<T>(enm: { [s: string]: T }, value: string): T | undefined {
     return (Object.values(enm) as unknown as string[]).includes(value)
         ? value as unknown as T
@@ -179,6 +186,9 @@ async function localMain() {
                     connPayloadQueue.push(decodedData.payload);
                 }
             }
+            if (commandHeader !== undefined && commandHeader.command !== "ping") {
+                console.log(commandHeader);
+            }
             if (commandHeader === undefined) {
                 // Do nothing
             } else if (commandHeader.command === "ping") {
@@ -210,6 +220,8 @@ async function localMain() {
                 if (tcpConn !== null) {
                     tcpConn.close();
                 }
+            } else if (commandHeader.command === "close" && (state === States.CLOSED || state === States.CLOSING)) {
+                // do nothing
             } else if (commandHeader.command === "ack_closed" && state === States.CLOSED) {
                 state = States.READY;
                 sendResponse(socket, "update", state);
@@ -222,9 +234,6 @@ async function localMain() {
                 if (tcpConn !== null) { //} && conn instanceof Deno.Conn) { //!== null) {
                     tcpConn.close();
                 }
-            }
-            if (commandHeader !== undefined && commandHeader.command !== "ping") {
-                console.log(commandHeader);
             }
         }
         function addConnEventListeners(eventName: string) {
@@ -291,7 +300,6 @@ async function localMain() {
             console.log("conn === null");
         }
         console.log(typeof state);
-
         // TS has issues handling async modified variables
         // @ts-ignore
         if (state === States.OPEN || state === States.OPENING) {
@@ -300,7 +308,6 @@ async function localMain() {
                 tcpConn.close();
             }
         }
-
         resolve(); // Resolve the promise when the "close" event is fired
     });
 }
@@ -340,45 +347,45 @@ async function remoteMain() {
         const event = await waitForMessage(socket); // TODO timeout/retry/unintended or pending messages?
         const buffer = await event.data.arrayBuffer();
         const decoded = decodeStringWithLength(buffer);
-        const responseHeader: ResponseHeader = decoded.header as ResponseHeader;
+        const responseHeader: ResponseHeader = decoded.header as ResponseHeader; // TODO handle undefined
         if (remoteState !== stringToState(responseHeader.state)) {
             remoteState = stringToState(responseHeader.state);
-            console.log(decoded.header);
+            console.log("Synchronization: " + JSON.stringify(decoded.header));
         }
         if (responseHeader.state === States.READY) {
             break;
         } else {
             console.log("not in ready state");
         }
-        if (responseHeader.state === States.ERROR) {
+        if (remoteState === States.ERROR) {
             const payload = { command: 'reset' };
             socket.send(encodeStringWithLength(payload, new Uint8Array()));
-            await sleep(1);
+            await sleep(1); // let reset complete on local client
         }
-        if (responseHeader.state === States.OPEN) {
+        if (remoteState === States.OPEN) {
             const payload = { command: 'close' };
             socket.send(encodeStringWithLength(payload, new Uint8Array()));
             const event = await waitForMessage(socket); // TODO timeout
             const buffer = await event.data.arrayBuffer();
             const decoded = decodeStringWithLength(buffer);
             console.log((decoded.header));
+
         }
-        if (responseHeader.state === States.CLOSED) {
-            const payload = { command: 'close_ack' };
+        if (remoteState === States.CLOSED) {
+            const payload = { command: 'ack_closed' };
             socket.send(encodeStringWithLength(payload, new Uint8Array()));
             const event = await waitForMessage(socket); // TODO timeout            
             const buffer = await event.data.arrayBuffer();
             const decoded = decodeStringWithLength(buffer);
             console.log((decoded.header));
         }
-        if (responseHeader.state === States.CLOSED || responseHeader.state === States.OPENING) {
-            await sleep(1);
+        if (remoteState === States.CLOSING || remoteState === States.OPENING) {
+            await sleep(1); // wait for stable state
         }
     }
-
-    //socket.removeEventListener("message", handleInitalEvent);
-
+    console.log("Synced with local client");
     socket.addEventListener("message", handleMessageEvent);
+    let connOpen = false;
     const listener = Deno.listen({ port: PORT, transport: "tcp", hostname: IP_ADDR });
     const intervalId = setInterval(function () { // ping timer
         const initialEventListener = new EventTarget();
@@ -390,6 +397,7 @@ async function remoteMain() {
 
     for await (const conn of listener) {
         console.log("New connection");
+        connOpen = false;
         handleConnection(conn);
         // TODO only one connection at a time
     }
@@ -408,7 +416,7 @@ async function remoteMain() {
                 remoteState = stringToState(responseHeader.state);
             }
 
-            if (responseHeader.state === States.CLOSED) {
+            if (responseHeader.response === "update" && responseHeader.state === States.CLOSED) { // only complete command chain (no pong)
                 await socket.send(encodeStringWithLength({ command: 'ack_closed' }, new Uint8Array()));
             }
         }
@@ -426,32 +434,50 @@ async function remoteMain() {
             }
             if (remoteState !== stringToState(responseHeader.state)) {
                 remoteState = stringToState(responseHeader.state);
-                console.log(responseHeader);
+                console.log("State update: " + JSON.stringify(decoded.header));
             }
-            if (responseHeader.state === States.CLOSED) {
+            if (remoteState === States.CLOSED) {
+                console.log("Local connection closed");
                 conn.close();
-                await socket.send(encodeStringWithLength({ command: 'ack_closed' }, new Uint8Array()));
             }
         }
         writerQueue = new QueueProcessor<Blob>(processWriter);
         try {
             await socket.send(encodeStringWithLength({ command: 'open' }, new Uint8Array()));
             for await (const chunk of conn.readable) {
-                const payload = {};
-                await socket.send(encodeStringWithLength(payload, chunk));
+                if (remoteState !== States.CLOSED && remoteState !== States.CLOSING) { // TODO !== States.OPEN
+                    const payload = {};
+                    await socket.send(encodeStringWithLength(payload, chunk));
+                }
             }
         } catch (error) {
             if (error instanceof Deno.errors.BadResource) {
-                console.log("Connection closed by client.");
+                console.log("Connection closed by client (BadResource).");
             } else {
                 console.error("Error reading from stream:", error);
             }
         } finally {
             writerQueue = null;
-            if (conn !== null) {
+            if (remoteState === States.OPEN) {
                 await socket.send(encodeStringWithLength({ command: 'close' }, new Uint8Array()));
+                while (true) {
+                    const event = await waitForMessage(socket); // TODO timeout            
+                    const buffer = await event.data.arrayBuffer();
+                    const decoded = decodeStringWithLength(buffer);
+                    const resp = decoded.header as ResponseHeader;
+
+                    /*
+                    if (stringToState(resp.state) === States.CLOSED) {
+                        const payload = { command: 'ack_closed' };
+                        socket.send(encodeStringWithLength(payload, new Uint8Array()));
+                        const event = await waitForMessage(socket); // TODO timeout            
+                        const buffer = await event.data.arrayBuffer();
+                        const decoded = decodeStringWithLength(buffer);
+                        break;
+                    }*/
+                }
+                console.log("Connection closed by client.");
             }
-            console.log("Connection closed by client.");
         }
     }
 }

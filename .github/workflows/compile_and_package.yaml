@@ -41,7 +41,7 @@ jobs:
 
       - name: Package into archive
         run: |
-          tar -czvf hometunnel-${{ matrix.target }}.tar.gz package/*
+          tar -C package -czvf hometunnel-${{ matrix.target }}.tar.gz .
           rm -rf package
         
       - name: Upload artifact
