@@ -35,7 +35,7 @@ jobs:
       - name: Copy executable and assets
         run: |
           mkdir package
-          if [[ ${{ matrix.os }} == 'linux-latest' ]]; then
+          if [[ ${{ matrix.target }} != 'x86_64-pc-windows-msvc' ]]; then
             mv -v home-tunnel package/
           else
             mv -v home-tunnel.exe package/
