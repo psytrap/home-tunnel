@@ -6,9 +6,10 @@ import { Command } from "jsr:@cliffy/command@^1.0.0-rc.7"
 // TODO error handling / failure points analysis
 // TODO backplane comms
 // TODO Timeout for inital connection setup
-// TODO API key
+// TODO API key based security
 // TODO version numbering
 // TODO use command and response enum
+// TODO shutdown relay with password
 
 const { options } = await new Command()
     .name("Home Tunnel")
@@ -294,12 +295,17 @@ async function localMain() {
             state = States.READY;
             sendResponse(socket, "update", state);
         });
+        // WORKAROUND Sometimes Deno Deploy fails to properly shutdown instances and leaves dead connection. Therefor we reset every hour.
+        const intervalId = setInterval(function () { // reset the connection frequently           
+            if(state !== States.OPEN && state !== States.OPENING && state !== States.CLOSING) { // SSH will timeout if open on a dead connection
+                socket.close();
+            }
+        }, 3600 * 1000);
         await waitForSocketClose(socket);
         console.log("State: " + state);
         if (!isConn(tcpConn)) {
             console.log("conn === null");
         }
-        console.log(typeof state);
         // TS has issues handling async modified variables
         // @ts-ignore
         if (state === States.OPEN || state === States.OPENING) {
@@ -308,6 +314,7 @@ async function localMain() {
                 tcpConn.close();
             }
         }
+        clearInterval(intervalId);
         resolve(); // Resolve the promise when the "close" event is fired
     });
 }
@@ -343,6 +350,7 @@ async function remoteMain() {
     let writerQueue: QueueProcessor<Blob> | null = null;
     while (true) {
         const payload = { command: 'ping' };
+        console.log("Starting with a ping");
         socket.send(encodeStringWithLength(payload, new Uint8Array()));
         const event = await waitForMessage(socket); // TODO timeout/retry/unintended or pending messages?
         const buffer = await event.data.arrayBuffer();

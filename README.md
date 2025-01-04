@@ -7,7 +7,7 @@ Three components:
 * Relay server hosted on Deno Deploy relaying data between local client and remote client
 * Remote client running on the remotly machine accessing the forwarded port on the local host system
 
-No security, very prone to DoS attacks. Using a second SSH tunnel is recommend for security.
+No security, very prone to DoS attacks. Using a second SSH tunnel with secure password is recommend for security.
 
 # Example
 
@@ -27,9 +27,13 @@ home-tunnel --relay <URL for your relay server> --port <e.g. 22 to forward SSH>
 ```
 sudo install_service.sh <URL for your relay server>
 ```
-* Check status of service with (exit by pressing 'q')
+* Check status of service with
 ```
 systemctl status home-tunnel.service
+```
+or (exit by pressing 'q')
+```
+sudo journalctl  home-tunnel.service
 ```
 
 # Run Remote Client
@@ -43,6 +47,14 @@ home-tunnel --relay <URL for your relay server> --port <e.g. 22222>
 ```
 ssh -p 22222 <user on local system>@127.0.0.1
 ```
+* ```ssh-copy-id``` might help increasing password security
+
+# Kown Issues
+
+This is a very basic solution so far and has several uncritical issues.
+* Sometimes Deno shutsdown instances leaving dead local client connection. An hourly idle connection reset has been implemented.
+* No communication when conneting to data center with different  regions.
+* Only the local client has good error handling to ensure survivablity. Restart remote client and relay server when observing issue.
 
 # Alternatives
 
