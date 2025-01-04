@@ -35,7 +35,11 @@ jobs:
       - name: Copy executable and assets
         run: |
           mkdir package
-          mv -v home-tunnel package/
+          if [[ ${{ matrix.os }} == 'linux-latest' ]]; then
+            mv -v home-tunnel package/
+          else
+            mv -v home-tunnel.exe package/
+          fi
           cp -v install_service.sh package/
           cp -v home-tunnel.service.template package/
 
