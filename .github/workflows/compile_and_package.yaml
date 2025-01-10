@@ -47,13 +47,10 @@ jobs:
             echo "archive_path=hometunnel.exe" >> $GITHUB_OUTPUT
           fi
           echo "archive_path: ${{ steps.executables.outputs.archive_path }}"
-
-      - name: Package into archive
-        run: |
         
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: home-tunnel-${{ matrix.target }}
-          path: ${{ steps.executable.outputs.archive_path }}
+          path: ${{ steps.executables.outputs.archive_path }}
           if-no-files-found: error
