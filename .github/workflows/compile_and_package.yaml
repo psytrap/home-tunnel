@@ -33,6 +33,7 @@ jobs:
         run: deno compile --allow-net --target ${{ matrix.target }} home-tunnel.ts
 
       - name: Copy executable and assets
+        id: executables
         run: |
           if [[ ${{ matrix.target }} != 'x86_64-pc-windows-msvc' ]]; then
             mkdir package
@@ -54,5 +55,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: home-tunnel-${{ matrix.target }}
-          path: ${{ steps.package.outputs.archive_path }}
+          path: ${{ steps.executable.outputs.archive_path }}
           if-no-files-found: error
