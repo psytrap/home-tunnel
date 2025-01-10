@@ -41,9 +41,9 @@ jobs:
             cp -v home-tunnel.service.template package/
             tar -C package -czvf hometunnel-${{ matrix.target }}.tar.gz .
             rm -rf package
-            archive_path=hometunnel-${{ matrix.target }}.tar.gz
+            echo "archive_path=hometunnel-${{ matrix.target }}.tar.gz" >> $GITHUB_OUTPUT
           else
-            archive_path=home-tunnel.exe
+            echo "archive_path=hometunnel.exe" >> $GITHUB_OUTPUT
           fi
 
       - name: Package into archive
@@ -53,5 +53,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: home-tunnel-${{ matrix.target }}
-          path: ${{ archive_path }}
+          path: ${{ steps.package.outputs.archive_path }}
           if-no-files-found: error
