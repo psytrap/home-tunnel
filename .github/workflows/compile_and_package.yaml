@@ -46,7 +46,7 @@ jobs:
           else
             echo "archive_path=hometunnel.exe" >> $GITHUB_OUTPUT
           fi
-          echo "archive_path: ${{ steps.package.outputs.archive_path }}"
+          echo "archive_path: ${{ steps.executables.outputs.archive_path }}"
 
       - name: Package into archive
         run: |
