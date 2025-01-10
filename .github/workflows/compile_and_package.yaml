@@ -34,23 +34,24 @@ jobs:
 
       - name: Copy executable and assets
         run: |
-          mkdir package
           if [[ ${{ matrix.target }} != 'x86_64-pc-windows-msvc' ]]; then
+            mkdir package
             mv -v home-tunnel package/
+            cp -v install_service.sh package/
+            cp -v home-tunnel.service.template package/
+            tar -C package -czvf hometunnel-${{ matrix.target }}.tar.gz .
+            rm -rf package
+            archive_path=hometunnel-${{ matrix.target }}.tar.gz
           else
-            mv -v home-tunnel.exe package/
+            archive_path=home-tunnel.exe
           fi
-          cp -v install_service.sh package/
-          cp -v home-tunnel.service.template package/
 
       - name: Package into archive
         run: |
-          tar -C package -czvf hometunnel-${{ matrix.target }}.tar.gz .
-          rm -rf package
         
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: home-tunnel-${{ matrix.target }}
-          path: hometunnel-${{ matrix.target }}.tar.gz
+          path: ${{ archive_path }}
           if-no-files-found: error
