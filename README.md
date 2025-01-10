@@ -6,8 +6,10 @@ Three components:
 * Local client running on the host system
 * Relay server hosted on Deno Deploy relaying data between local client and remote client
 * Remote client running on the remotly machine accessing the forwarded port on the local host system
-
-No security, very prone to DoS attacks. Using a second SSH tunnel with secure password is recommend for security.
+![SSH use case](ssh_use_case.svg)
+<!--
+https://dreampuf.github.io/GraphvizOnline/?engine=dot#digraph%20G%20%7B%0A%20%7Brank%3Dsame%3B%20ssh_client%3B%20ssh_server%3B%20local%3B%20remote%7D%20%20%20%20%0A%20%20ssh_client%20-%3E%20remote%3B%0A%20%20remote%20-%3E%20relay%3B%0A%20%20local%20-%3E%20relay%3B%0A%20%20local%20-%3E%20ssh_server%3B%0A%0A%20%20remote%20%5Blabel%3D%22home-tunnel%20--remote%22%20shape%3Drect%5D%3B%0A%20%20relay%20%5Blabel%3D%22Relay%20Server%20(on%20Deno%20Deploy)%22%20shape%3Drect%5D%3B%0A%20%20local%20%5Blabel%3D%22home-tunnel%22%20shape%3Drect%5D%3B%0A%20%20ssh_client%20%5Blabel%3D%22SSH%20client%22%5D%3B%0A%20%20ssh_server%20%5Blabel%3D%22SSH%20server%22%5D%3B%0A%7D%0A
+-->
 
 # Example
 
