@@ -5,6 +5,8 @@
 URL=$1
 PORT=22
 
+systemctl stop home-tunnel
+
 groupadd home-tunnel
 useradd -m -g home-tunnel home-tunnel
 

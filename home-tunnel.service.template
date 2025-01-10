@@ -5,7 +5,7 @@ After = network.target
  
 [Service]
 Type = simple
-ExecStart = /home/home-tunnel/home-tunnel --url {{URL}} --port {{PORT}}
+ExecStart = /home/home-tunnel/home-tunnel --relay {{URL}} --port {{PORT}}
 User = home-tunnel
 Group = home-tunnel
 Restart = on-failure
