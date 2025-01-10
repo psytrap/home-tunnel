@@ -1,0 +1,60 @@
+<svg width="502pt" height="116pt" viewBox="0.00 0.00 502.37 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 112)">
+<title>G</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-112 498.37,-112 498.37,4 -4,4"/>
+<!-- ssh_client -->
+<g id="node1" class="node">
+<title>ssh_client</title>
+<ellipse fill="none" stroke="black" cx="52.62" cy="-90" rx="52.62" ry="18"/>
+<text text-anchor="middle" x="52.62" y="-85.8" font-family="Times,serif" font-size="14.00">SSH client</text>
+</g>
+<!-- remote -->
+<g id="node4" class="node">
+<title>remote</title>
+<polygon fill="none" stroke="black" points="261.84,-108 123.39,-108 123.39,-72 261.84,-72 261.84,-108"/>
+<text text-anchor="middle" x="192.62" y="-85.8" font-family="Times,serif" font-size="14.00">home-tunnel --remote</text>
+</g>
+<!-- ssh_client&#45;&gt;remote -->
+<g id="edge1" class="edge">
+<title>ssh_client-&gt;remote</title>
+<path fill="none" stroke="black" d="M105.66,-90C107.65,-90 109.63,-90 111.62,-90"/>
+<polygon fill="black" stroke="black" points="111.47,-93.5 121.47,-90 111.47,-86.5 111.47,-93.5"/>
+</g>
+<!-- ssh_server -->
+<g id="node2" class="node">
+<title>ssh_server</title>
+<ellipse fill="none" stroke="black" cx="439.62" cy="-90" rx="54.76" ry="18"/>
+<text text-anchor="middle" x="439.62" y="-85.8" font-family="Times,serif" font-size="14.00">SSH server</text>
+</g>
+<!-- local -->
+<g id="node3" class="node">
+<title>local</title>
+<polygon fill="none" stroke="black" points="367,-108 280.24,-108 280.24,-72 367,-72 367,-108"/>
+<text text-anchor="middle" x="323.62" y="-85.8" font-family="Times,serif" font-size="14.00">home-tunnel</text>
+</g>
+<!-- local&#45;&gt;ssh_server -->
+<g id="edge4" class="edge">
+<title>local-&gt;ssh_server</title>
+<path fill="none" stroke="black" d="M367.12,-90C369.1,-90 371.08,-90 373.05,-90"/>
+<polygon fill="black" stroke="black" points="372.88,-93.5 382.88,-90 372.88,-86.5 372.88,-93.5"/>
+</g>
+<!-- relay -->
+<g id="node5" class="node">
+<title>relay</title>
+<polygon fill="none" stroke="black" points="354.64,-36 160.59,-36 160.59,0 354.64,0 354.64,-36"/>
+<text text-anchor="middle" x="257.62" y="-13.8" font-family="Times,serif" font-size="14.00">Relay Server (on Deno Deploy)</text>
+</g>
+<!-- local&#45;&gt;relay -->
+<g id="edge3" class="edge">
+<title>local-&gt;relay</title>
+<path fill="none" stroke="black" d="M307.3,-71.7C299.55,-63.47 290.13,-53.48 281.58,-44.42"/>
+<polygon fill="black" stroke="black" points="284.19,-42.08 274.78,-37.21 279.09,-46.88 284.19,-42.08"/>
+</g>
+<!-- remote&#45;&gt;relay -->
+<g id="edge2" class="edge">
+<title>remote-&gt;relay</title>
+<path fill="none" stroke="black" d="M208.68,-71.7C216.32,-63.47 225.6,-53.48 234.01,-44.42"/>
+<polygon fill="black" stroke="black" points="236.46,-46.92 240.7,-37.21 231.33,-42.16 236.46,-46.92"/>
+</g>
+</g>
+</svg>
