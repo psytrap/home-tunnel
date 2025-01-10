@@ -40,11 +40,11 @@ jobs:
             mv -v home-tunnel package/
             cp -v install_service.sh package/
             cp -v home-tunnel.service.template package/
-            tar -C package -czvf hometunnel-${{ matrix.target }}.tar.gz .
+            tar -C package -czvf home-tunnel-${{ matrix.target }}.tar.gz .
             rm -rf package
-            echo "archive_path=hometunnel-${{ matrix.target }}.tar.gz" >> $GITHUB_OUTPUT
+            echo "archive_path=home-tunnel-${{ matrix.target }}.tar.gz" >> $GITHUB_OUTPUT
           else
-            echo "archive_path=hometunnel.exe" >> $GITHUB_OUTPUT
+            echo "archive_path=home-tunnel.exe" >> $GITHUB_OUTPUT
           fi
           echo "archive_path: ${{ steps.executables.outputs.archive_path }}"
         
