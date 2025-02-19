@@ -30,7 +30,7 @@ jobs:
           deno-version: v2.x
 
       - name: Compile for ${{ matrix.target }}
-        run: deno compile --allow-net --target ${{ matrix.target }} home-tunnel.ts
+        run: deno compile --allow-net --allow-env --allow-rw --target ${{ matrix.target }} home-tunnel.ts
 
       - name: Copy executable and assets
         id: executables

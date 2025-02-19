@@ -58,6 +58,8 @@ This is a very basic solution so far and has several uncritical issues.
 
 # Alternatives
 
+## Tunneling
+
 * Cloudflare Tunnel
 * ngrok
 * localtunnel
@@ -65,3 +67,9 @@ This is a very basic solution so far and has several uncritical issues.
 * bore
 * tunnelto
 * rathole
+
+## Reverse Proxy
+
+Proxies are another way to tunnel specifically HTTP traffic.
+
+* Caddy

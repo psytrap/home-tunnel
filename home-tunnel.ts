@@ -1,31 +1,137 @@
-import { parseArgs } from "jsr:@std/cli/parse-args";
+import { join } from "jsr:@std/path";
+//import { parseArgs } from "jsr:@std/cli/parse-args";
 import { sleep } from "https://deno.land/x/sleep/mod.ts"
 import { Command } from "jsr:@cliffy/command@^1.0.0-rc.7"
+import { Input, Number, Toggle } from "jsr:@cliffy/prompt@^1.0.0-rc.7"
+import { bold, red } from "jsr:@std/fmt/colors";
+import { ensureDirSync } from "jsr:@std/fs/ensure-dir";
 
+
+// TODO backplane comms - global reset
+// TODO API key based security
 // TODO only one connection at time better
 // TODO error handling / failure points analysis
-// TODO backplane comms
 // TODO Timeout for inital connection setup
-// TODO API key based security
 // TODO version numbering
 // TODO use command and response enum
 // TODO shutdown relay with password
+// TODO graceful shutdown
+// TODO idle restart option / timeout
 
-const { options } = await new Command()
+const LOCALHOST = "127.0.0.1";
+const RETRY_TIME = 2 * 60;
+const CONNECTION_RESET_TIME = 3600; // 1 hour
+const cmd = new Command()
     .name("Home Tunnel")
-    .version("0.0.1")
-    .description("My command-line program")
-    .option("-p, --port <port:number>", "Port number", { required: true })
-    .option("-x, --relay <relay:string>", "URL of relay", { required: true })
-    .option("-i, --host <host:string>", "URL/IP of forwarded host", { default: "127.0.0.1" })
+    .version("0.0.4") // Don't forget release tags
+    .description("Home Tunnel CLI for the local and the remote node")
+    .option("-p, --port <port:number>", "Port number (destination/source)")
+    .option("-x, --relay <relay:string>", "URL of relay")
+    .option("-i, --host <host:string>", "Hostname or IP to be forwarded", { default: LOCALHOST })
     .option("-r, --remote", "Use as remote connection client")
-    .parse(Deno.args);
+    .option("-t, --tui", "Terminal based UI");
+const { options } = await cmd.parse(Deno.args);
 
-const REMOTE: boolean = options.remote ?? false;
-const SIDE: string = REMOTE ? "left" : "right";
-const URL: string = options.relay + '/' + SIDE;
-const PORT: number = options.port;
-const IP_ADDR: string = options.host;
+
+let REMOTE: boolean | undefined;
+let SIDE: string | undefined;
+let URL: string;
+let PORT: number;
+let IP_ADDR: string | undefined;
+// let API_KEY
+
+console.log(options);
+console.log(options.port);
+
+async function loadConfig(configFile: string): Promise<any | null> {
+    try {
+        const configText = await Deno.readTextFile(configFile);
+        const config = JSON.parse(configText);
+        return config;
+    } catch (error) {
+        if (error instanceof Deno.errors.NotFound) {
+            return {};
+        } else if (error instanceof SyntaxError) {
+            return {};
+        } else {
+            throw error;
+        }
+    }
+}
+if (options.tui === true) {
+    const config_dir = join(getConfigDirectory(true), "home-tunnel");
+    const config_filename = join(config_dir, "home-tunnel.json");
+    ensureDirSync(config_dir);
+    let config = await loadConfig(config_filename);
+    if (Object.keys(config).length !== 0) {
+        console.log("Config file found: " + config_filename)
+    }
+    config.port = options.port ?? config.port; // initially undefined
+    config.relay = options.relay ?? config.relay; // initially undefined
+    config.remote = options.remote ?? config.remote; // initially undefined
+    if (options.host !== LOCALHOST) {
+        config.host = options.host;
+    }
+    console.log(config);
+    config.port = await Number.prompt({
+        message: "Enter the port number to be used:",
+        default: config.port,
+    });
+    //console.log(globalThis.URL.parse("wss://simple-socket-relay.deno.dev"));
+    config.relay = await Input.prompt({
+        message: 'Enter the URL of the relay server:',
+        default: config.relay,
+        validate: (value) => {
+            try {
+                globalThis.URL.parse(value);
+                return true;
+            } catch (error) {
+                return 'Invalid URL. Please enter a valid URL (e.g., https://www.example.com).';
+            }
+        },
+    });
+    // cliffy doesn't validated default :(
+    config.remote = await Toggle.prompt({
+        message: "Run as the remote client:",
+        default: config.remote,
+    });
+    if (config.remote !== true) {
+        config.host = await Input.prompt({
+            message: "Enter IP or hostname to be forwarded:",
+            default: config.host,
+        });
+    }
+    // Safe config
+    const jsonString = JSON.stringify(config, null, 4);
+    await Deno.writeTextFile(config_filename, jsonString);
+    REMOTE = config.remote;
+    SIDE = REMOTE ? "left" : "right";
+    URL = config.relay + '/' + SIDE;
+    PORT = config.port;
+    IP_ADDR = config.host;
+} else {
+    if (options.port === undefined || options.relay === undefined) {
+        cmd.showHelp();
+        console.log(red((bold("  Error: Missing required option \"--tui\" OR required option \"--port\" and \"--relay\""))));
+        Deno.exit(0);
+    }
+    REMOTE = options.remote ?? false;
+    SIDE = REMOTE ? "left" : "right";
+    URL = options.relay + '/' + SIDE;
+    PORT = options.port;
+    IP_ADDR = options.host;
+}
+
+try {
+    const url = new globalThis.URL(URL);
+    if (!(url.protocol === "http:" || url.protocol === "https:" || url.protocol === "ws:" || url.protocol === "wss:")) {
+        throw -1;
+    }
+} catch (error) {
+    throw 'Invalid URL. Please enter a valid URL (e.g., https://www.example.com or wss://exampel.com/ws).';
+}
+
+
 
 enum States {
     ERROR = "error", // any_error
@@ -53,6 +159,14 @@ function enumFromStringValue<T>(enm: { [s: string]: T }, value: string): T | und
 function stringToState(state: string): States | undefined {
     return enumFromStringValue(States, state);
 }
+
+
+const webSocketState: { [key: number]: string } = {
+    [WebSocket.CONNECTING]: "CONNECTING",
+    [WebSocket.OPEN]: "OPEN",
+    [WebSocket.CLOSING]: "CLOSING",
+    [WebSocket.CLOSED]: "CLOSED",
+};
 
 interface ProcessingFunction<T> {
     (event: T): Promise<void>;
@@ -104,6 +218,28 @@ class QueueProcessor<T> {
     }
 }
 
+function getConfigDirectory(roaming: boolean): string {
+    if (Deno.build.os === "linux") {
+        const config_dir = Deno.env.get("XDG_CONFIG_HOME");
+        if (config_dir) {
+            return config_dir;
+        } else {
+            return "~/.config";
+        }
+    } else if (Deno.build.os === "windows") {
+        const config_dir = roaming
+            ? Deno.env.get("APPDATA") // Roaming AppData
+            : Deno.env.get("LOCALAPPDATA"); // Local AppData
+        if (config_dir === undefined) {
+            throw new Error("Config dir cannot be resolved. (%APPDATA% / %LOCALAPPDATA%)");
+        }
+        return config_dir;
+    } else if (Deno.build.os === "darwin") {
+        return "~/Library/Preferences";
+    } else {
+        throw new Error("Unknown operating system");
+    }
+}
 
 function encodeStringWithLength(header: object, payload: ArrayBuffer): ArrayBuffer {
     const headerString = JSON.stringify(header);
@@ -151,8 +287,9 @@ async function sendResponse(socket: WebSocket, response: string, state: States) 
 
 async function waitForSocketClose(socket: WebSocket): Promise<void> {
     return new Promise<void>((resolve) => {
-        socket.addEventListener("close", () => {
-            console.log("WebSocket connection closed");
+        socket.addEventListener("close", (event) => {
+            console.log(`WebSocket connection closed (${event.code})`);
+
             resolve(); // Resolve the promise when the "close" event is fired
         });
     });
@@ -175,7 +312,7 @@ interface CommandHeader {
 
 
 async function localMain() {
-    return new Promise<void>(async (resolve) => {
+    return new Promise<void>(async (resolve) => { // Exits when socket is closed
         async function dataDecoder(data: Blob) {
             const buffer = await data.arrayBuffer();
             const decodedData = decodeStringWithLength(buffer);
@@ -237,7 +374,7 @@ async function localMain() {
                 }
             }
         }
-        function addConnEventListeners(eventName: string) {
+        function addTcpConnEventListeners(eventName: string) {
             connEventListener.addEventListener(eventName, async () => {
                 console.log("New connection...");
                 try {
@@ -272,7 +409,7 @@ async function localMain() {
         let tcpConn: Deno.Conn | null = null;
         let connOpen = false;
         const connEventListener = new EventTarget();
-        console.log(URL);
+        console.log("Connecting to: " + URL);
         const socket = new WebSocket(URL);
         /*
         socket.headers = {
@@ -285,23 +422,30 @@ async function localMain() {
         async function handleMessage(event: MessageEvent) {
             messageQueue.addData(event.data);
         }
-        addEventListeners(socket);
+
         socket.addEventListener("message", async (event) => {
             await handleMessage(event);
         });
-        addConnEventListeners("open");
         socket.addEventListener("open", () => {
-            console.log(socket.readyState);
+            console.log(webSocketState[socket.readyState]);
             state = States.READY;
             sendResponse(socket, "update", state);
         });
+        socket.addEventListener("error", (error) => {
+            console.error(new Date().toISOString(), "WebSocket error:", error);
+        });
+        addTcpConnEventListeners("open");
+
+
         // WORKAROUND Sometimes Deno Deploy fails to properly shutdown instances and leaves dead connection. Therefor we reset every hour.
         const intervalId = setInterval(function () { // reset the connection frequently           
-            if(state !== States.OPEN && state !== States.OPENING && state !== States.CLOSING) { // SSH will timeout if open on a dead connection
+            if (state !== States.OPEN && state !== States.OPENING && state !== States.CLOSING) { // SSH will timeout if open on a dead connection
+                console.log("Closing WebSocket connection");
                 socket.close();
             }
-        }, 3600 * 1000);
+        }, CONNECTION_RESET_TIME * 1000); // TODO configurable
         await waitForSocketClose(socket);
+
         console.log("State: " + state);
         if (!isConn(tcpConn)) {
             console.log("conn === null");
@@ -315,6 +459,7 @@ async function localMain() {
             }
         }
         clearInterval(intervalId);
+        console.log(webSocketState[socket.readyState]);
         resolve(); // Resolve the promise when the "close" event is fired
     });
 }
@@ -501,7 +646,7 @@ async function remoteMain() {
                     }
                 }
                 console.log("Connection closed by client.");
-                
+
             }
             connOpen = false;
 
@@ -513,10 +658,22 @@ async function remoteMain() {
 
 if (REMOTE === true) {
     console.log("Remote mode");
-    remoteMain();
+    await remoteMain();
 } else {
     while (true) {
+        const startTime = performance.now();
+
         await localMain();
-        await sleep(1);
+
+        const endTime = performance.now();
+        const executionTime = (endTime - startTime) / 1000;
+        // avoid poll flooding in case of connection issues
+        if (executionTime < RETRY_TIME) { // only retry once every 30 seconds
+            const sleepTime = Math.max(0, RETRY_TIME - executionTime);
+            await sleep(sleepTime);
+        } else { // immediatly retry once
+            const SLEEP_TIME = 5;
+            await sleep(SLEEP_TIME);
+        }
     }
 }
