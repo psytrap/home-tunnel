@@ -384,7 +384,7 @@ async function localMain() {
                     });
                     for await (const chunk of tcpConn.readable) {
                         const payload = {};
-                        await socket.send(encodeStringWithLength(payload, chunk));
+                        await socket.send(encodeStringWithLength(payload, chunk.buffer));
                     }
                 } catch (error) {
                     if (error instanceof Deno.errors.BadResource) {
