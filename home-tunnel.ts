@@ -23,7 +23,7 @@ const RETRY_TIME = 2 * 60;
 const CONNECTION_RESET_TIME = 3600; // 1 hour
 const cmd = new Command()
     .name("Home Tunnel")
-    .version("0.0.4") // Don't forget release tags
+    .version("0.0.5") // Don't forget release tags
     .description("Home Tunnel CLI for the local and the remote node")
     .option("-p, --port <port:number>", "Port number (destination/source)")
     .option("-x, --relay <relay:string>", "URL of relay")
@@ -652,6 +652,7 @@ async function remoteMain() {
 
         }
     }
+    return;
 }
 
 

@@ -73,3 +73,10 @@ This is a very basic solution so far and has several uncritical issues.
 Proxies are another way to tunnel specifically HTTP traffic.
 
 * Caddy
+
+# Release plan
+
+* Version: home-tunnel.ts, git tag, deno.json
+* Check staging relay server
+* Try RasPi binary + Linux binary from GitHub
+* Nightly run with RasPi
