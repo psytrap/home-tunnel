@@ -496,7 +496,7 @@ async function remoteMain() {
     while (true) {
         const payload = { command: 'ping' };
         console.log("Starting with a ping");
-        socket.send(encodeStringWithLength(payload, new Uint8Array()));
+        socket.send(encodeStringWithLength(payload, new Uint8Array().buffer));
         const event = await waitForMessage(socket); // TODO timeout/retry/unintended or pending messages?
         const buffer = await event.data.arrayBuffer();
         const decoded = decodeStringWithLength(buffer);
@@ -512,12 +512,12 @@ async function remoteMain() {
         }
         if (remoteState === States.ERROR) {
             const payload = { command: 'reset' };
-            socket.send(encodeStringWithLength(payload, new Uint8Array()));
+            socket.send(encodeStringWithLength(payload, new Uint8Array().buffer));
             await sleep(1); // let reset complete on local client
         }
         if (remoteState === States.OPEN) {
             const payload = { command: 'close' };
-            socket.send(encodeStringWithLength(payload, new Uint8Array()));
+            socket.send(encodeStringWithLength(payload, new Uint8Array().buffer));
             const event = await waitForMessage(socket); // TODO timeout
             const buffer = await event.data.arrayBuffer();
             const decoded = decodeStringWithLength(buffer);
@@ -526,7 +526,7 @@ async function remoteMain() {
         }
         if (remoteState === States.CLOSED) {
             const payload = { command: 'ack_closed' };
-            socket.send(encodeStringWithLength(payload, new Uint8Array()));
+            socket.send(encodeStringWithLength(payload, new Uint8Array().buffer));
             const event = await waitForMessage(socket); // TODO timeout            
             const buffer = await event.data.arrayBuffer();
             const decoded = decodeStringWithLength(buffer);
@@ -544,7 +544,7 @@ async function remoteMain() {
         const initialEventListener = new EventTarget();
 
         const payload = { command: 'ping' };
-        socket.send(encodeStringWithLength(payload, new Uint8Array()));
+        socket.send(encodeStringWithLength(payload, new Uint8Array().buffer));
         // TODO await pong with timeout? remote state?
     }, 5000);
 
@@ -577,7 +577,7 @@ async function remoteMain() {
             }
 
             if (responseHeader.response === "update" && responseHeader.state === States.CLOSED) { // only complete command chain (no pong)
-                await socket.send(encodeStringWithLength({ command: 'ack_closed' }, new Uint8Array()));
+                await socket.send(encodeStringWithLength({ command: 'ack_closed' }, new Uint8Array().buffer));
             }
         }
     }
@@ -604,7 +604,7 @@ async function remoteMain() {
         }
         writerQueue = new QueueProcessor<Blob>(processWriter);
         try {
-            await socket.send(encodeStringWithLength({ command: 'open' }, new Uint8Array()));
+            await socket.send(encodeStringWithLength({ command: 'open' }, new Uint8Array().buffer));
             console.log("awaiting chunks");
             async function readChunks(remoteConn: Deno.Conn) {
                 for await (const chunk of remoteConn.readable) {
@@ -613,7 +613,7 @@ async function remoteMain() {
                     }
                     if (remoteState !== States.CLOSED && remoteState !== States.CLOSING) { // TODO !== States.OPEN
                         const payload = {};
-                        await socket.send(encodeStringWithLength(payload, chunk));
+                        await socket.send(encodeStringWithLength(payload, chunk.buffer));
                     }
                 }
             }
@@ -628,7 +628,7 @@ async function remoteMain() {
         } finally {
             writerQueue = null;
             if (remoteState === States.OPEN) {
-                await socket.send(encodeStringWithLength({ command: 'close' }, new Uint8Array()));
+                await socket.send(encodeStringWithLength({ command: 'close' }, new Uint8Array().buffer));
                 while (true) {
                     const event = await waitForMessage(socket); // TODO timeout            
                     const buffer = await event.data.arrayBuffer();
