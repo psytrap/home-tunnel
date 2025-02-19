@@ -14,16 +14,45 @@ No security, very prone to DoS attacks. Using a second SSH tunnel with secure pa
 ## Setup Relay Server
 
 * Create a Playground server on Deno Deploy
-* Copy and paste the home-tunnel-relay.ts code into the playground and press run
+* Add your costum configuration to the generic Management Panel of the Relay Server
+```
+import {serve} from "jsr:@psytrap/home-tunnel-relay"
+import { OAuth2Client } from "jsr:@cmd-johnson/oauth2-client@^2.0.0";
 
-# Setup Local Client
+
+const USER_ID = parseInt(Deno.env.get("USER_ID") ?? "-1"); // https://api.github.com/users/<your_github_user_name>
+const HOST: string | undefined = Deno.env.get("HOST"); // my-subdoman.deno.dev
+const CLIENT_ID: string | undefined = Deno.env.get("CLIENT_ID") ?? "<Client ID>";
+const CLIENT_SECRET: string | undefined = Deno.env.get("CLIENT_SECRET") ?? "<Client Secret>";
+const APP_KEY = Deno.env.get("SECRET_COOKIE_KEY") ?? crypto.randomUUID(); // random alphanum
+
+const REDIRECT_URI = `https://${HOST}/oauth2/callback`;
+const oauth2Client = new OAuth2Client({
+clientId: CLIENT_ID,
+clientSecret: CLIENT_SECRET,
+authorizationEndpointUri: "https://github.com/login/oauth/authorize",
+  tokenUri: "https://github.com/login/oauth/access_token",
+  redirectUri: REDIRECT_URI,
+  defaults: {
+    scope: "read:user",
+  },
+});
+const PORT = 80;
+
+await serve(PORT, APP_KEY, oauth2Client, USER_ID);
+```
+* Setup an OAuth app in your GitHub account https://github.com/settings/developers
+* Configure the five environment parameters in the settings menu of the Playground
+
+
+## Setup Local Client
 
 * Download binaries for your host system architecture
 * Run from terminal
 ```
 home-tunnel --relay <URL for your relay server> --port <e.g. 22 to forward SSH>
  ```
-* For persistance install it as a system service
+* For persistance install it as a system service with port 22 as default
 ```
 sudo install_service.sh <URL for your relay server>
 ```
@@ -33,10 +62,10 @@ systemctl status home-tunnel.service
 ```
 or (exit by pressing 'q')
 ```
-sudo journalctl  home-tunnel.service
+sudo journalctl  home-tunnel.service -f
 ```
 
-# Run Remote Client
+## Run Remote Client
 
 * Download binaries for your remote machine architecture
 * Run from terminal and mirror port
@@ -80,3 +109,4 @@ Proxies are another way to tunnel specifically HTTP traffic.
 * Check staging relay server
 * Try RasPi binary + Linux binary from GitHub
 * Nightly run with RasPi
+* Final release on GitHub + Publish on JSR
