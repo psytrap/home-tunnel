@@ -241,7 +241,7 @@ function getConfigDirectory(roaming: boolean): string {
     }
 }
 
-function encodeStringWithLength(header: object, payload: ArrayBuffer): ArrayBuffer {
+function encodeStringWithLength(header: object, payload: Uint8Array): ArrayBuffer {
     const headerString = JSON.stringify(header);
     const length = headerString.length;
     const lengthString = length.toString().padStart(4, "0");
@@ -257,7 +257,7 @@ function encodeStringWithLength(header: object, payload: ArrayBuffer): ArrayBuff
     // Copy the length, string, and payload into the output ArrayBuffer
     outputView.set(lengthBytes, 0);
     outputView.set(stringBytes, lengthBytes.length);
-    outputView.set(new Uint8Array(payload), lengthBytes.length + stringBytes.length);
+    outputView.set(payload, lengthBytes.length + stringBytes.length);
 
     return outputBuffer;
 }
@@ -281,7 +281,7 @@ function addEventListeners(socket: WebSocket) { // , messageFunc: EventFunction<
 async function sendResponse(socket: WebSocket, response: string, state: States) {
     const resp = { response: response, state: state.toString() };
     //console.log(JSON.stringify(resp));
-    const msg = encodeStringWithLength(resp, new ArrayBuffer(0));
+    const msg = encodeStringWithLength(resp, new Uint8Array());
     return socket.send(msg);
 }
 
@@ -384,7 +384,7 @@ async function localMain() {
                     });
                     for await (const chunk of tcpConn.readable) {
                         const payload = {};
-                        await socket.send(encodeStringWithLength(payload, chunk.buffer));
+                        await socket.send(encodeStringWithLength(payload, chunk));
                     }
                 } catch (error) {
                     if (error instanceof Deno.errors.BadResource) {
@@ -496,7 +496,7 @@ async function remoteMain() {
     while (true) {
         const payload = { command: 'ping' };
         console.log("Starting with a ping");
-        socket.send(encodeStringWithLength(payload, new Uint8Array().buffer));
+        socket.send(encodeStringWithLength(payload, new Uint8Array()));
         const event = await waitForMessage(socket); // TODO timeout/retry/unintended or pending messages?
         const buffer = await event.data.arrayBuffer();
         const decoded = decodeStringWithLength(buffer);
@@ -512,12 +512,12 @@ async function remoteMain() {
         }
         if (remoteState === States.ERROR) {
             const payload = { command: 'reset' };
-            socket.send(encodeStringWithLength(payload, new Uint8Array().buffer));
+            socket.send(encodeStringWithLength(payload, new Uint8Array()));
             await sleep(1); // let reset complete on local client
         }
         if (remoteState === States.OPEN) {
             const payload = { command: 'close' };
-            socket.send(encodeStringWithLength(payload, new Uint8Array().buffer));
+            socket.send(encodeStringWithLength(payload, new Uint8Array()));
             const event = await waitForMessage(socket); // TODO timeout
             const buffer = await event.data.arrayBuffer();
             const decoded = decodeStringWithLength(buffer);
@@ -526,7 +526,7 @@ async function remoteMain() {
         }
         if (remoteState === States.CLOSED) {
             const payload = { command: 'ack_closed' };
-            socket.send(encodeStringWithLength(payload, new Uint8Array().buffer));
+            socket.send(encodeStringWithLength(payload, new Uint8Array()));
             const event = await waitForMessage(socket); // TODO timeout            
             const buffer = await event.data.arrayBuffer();
             const decoded = decodeStringWithLength(buffer);
@@ -544,7 +544,7 @@ async function remoteMain() {
         const initialEventListener = new EventTarget();
 
         const payload = { command: 'ping' };
-        socket.send(encodeStringWithLength(payload, new Uint8Array().buffer));
+        socket.send(encodeStringWithLength(payload, new Uint8Array()));
         // TODO await pong with timeout? remote state?
     }, 5000);
 
@@ -577,7 +577,7 @@ async function remoteMain() {
             }
 
             if (responseHeader.response === "update" && responseHeader.state === States.CLOSED) { // only complete command chain (no pong)
-                await socket.send(encodeStringWithLength({ command: 'ack_closed' }, new Uint8Array().buffer));
+                await socket.send(encodeStringWithLength({ command: 'ack_closed' }, new Uint8Array()));
             }
         }
     }
@@ -604,7 +604,7 @@ async function remoteMain() {
         }
         writerQueue = new QueueProcessor<Blob>(processWriter);
         try {
-            await socket.send(encodeStringWithLength({ command: 'open' }, new Uint8Array().buffer));
+            await socket.send(encodeStringWithLength({ command: 'open' }, new Uint8Array()));
             console.log("awaiting chunks");
             async function readChunks(remoteConn: Deno.Conn) {
                 for await (const chunk of remoteConn.readable) {
@@ -613,7 +613,7 @@ async function remoteMain() {
                     }
                     if (remoteState !== States.CLOSED && remoteState !== States.CLOSING) { // TODO !== States.OPEN
                         const payload = {};
-                        await socket.send(encodeStringWithLength(payload, chunk.buffer));
+                        await socket.send(encodeStringWithLength(payload, chunk));
                     }
                 }
             }
@@ -628,7 +628,7 @@ async function remoteMain() {
         } finally {
             writerQueue = null;
             if (remoteState === States.OPEN) {
-                await socket.send(encodeStringWithLength({ command: 'close' }, new Uint8Array().buffer));
+                await socket.send(encodeStringWithLength({ command: 'close' }, new Uint8Array()));
                 while (true) {
                     const event = await waitForMessage(socket); // TODO timeout            
                     const buffer = await event.data.arrayBuffer();
